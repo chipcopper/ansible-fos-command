@@ -1,0 +1,35 @@
+---
+- hosts: switches
+  gather_facts: False
+
+  tasks:
+
+  - name: run fos commands
+    brocade_fos_command:
+      switch_login: admin
+      switch_password: password
+      switch_address: 10.1.2.3
+      command_set:
+
+
+        - command: alidelete "SampleAlias1"
+
+        - command: alidelete "SampleAlias2"
+
+
+        - command: zonedelete "SampleZone"
+
+        - command: cfgsave
+          prompts:
+            - question: Do you want to save
+              response: "yes"
+
+        - command: zoneshow
+
+        - command: alishow
+
+    register: configout
+
+  - name: print ansible_facts gathered
+    debug:
+      var: configout
