@@ -1,0 +1,144 @@
+---
+- hosts: switches
+  gather_facts: False
+
+  tasks:
+
+  - name: run fos commands
+    brocade_fos_command:
+      switch_login: admin
+      switch_password: password
+      switch_address: 10.1.2.3
+      command_set:
+        # 
+        - command: timeout 30
+          start_state:
+            - flag: changed
+              value: True
+
+        - command: defzone --allaccess
+          prompts:
+            - question: Do you want to
+              response: "yes"
+
+        - command: cfgsave
+          prompts:
+            - question: Do you want to
+              response: "yes"
+
+        - command: dnsconfig --add -domain example.com -serverip1 8.8.8.8 -serverip2 8.8.4.4
+
+        - command: tstimezone America/Chicago
+
+        - command: switchdisable
+
+        - command: configure
+          prompts:
+            - question: Fabric parameters
+              response: "yes"
+            - question: "Domain: (1..239)"
+              response: "1"
+            - question: Enable 8 bit Dynamic Area Mode
+              response: ""
+            - question: F-Port Device Update Mode
+              response: ""
+            - question: Location ID
+              response: ""
+            - question: R_A_TOV
+              response: ""
+            - question: E_D_TOV
+              response: ""
+            - question: WAN_TOV
+              response: ""
+            - question: MAX_HOPS
+              response: ""
+            - question: Data field size
+              response: ""
+            - question: Sequence Level Switching
+              response: ""
+            - question: Disable Device Probing
+              response: ""
+            - question: Suppress Class F Traffic
+              response: ""
+            - question: Per-frame Route Priority
+              response: ""           
+            - question: Long Distance Fabric
+              response: ""  
+            - question: BB credit
+              response: ""  
+            - question: Disable FID Check
+              response: ""
+            - question: Insistent Domain ID Mode
+              response: "yes"
+            - question: Disable Default PortName
+              response: ""
+            - question: Display FDMI Host Name
+              response: ""
+            - question: Dynamic Portname
+              response: "on"                           
+            - question: Edge Hold Time
+              response: ""
+            - question: Remote Fosexec feature
+              response: ""
+            - question: High Integrity Fabric Mode
+              response: ""
+            - question: Virtual Channel parameters
+              response: ""
+            - question: F-Port login parameters
+              response: ""
+            - question: D-Port Parameters
+              response: ""
+            - question: RDP Polling Cycle
+              response: ""
+            - question: Zoning Operation parameters
+              response: ""
+            - question: RSCN Transmission Mode
+              response: ""
+            - question: System services
+              response: ""
+            - question: Portlog events enable
+              response: ""
+
+        - command: switchenable
+
+        - command: 'portname -d "C.T.A.R"'
+
+        - command: fabricprincipal --enable -p 0x03 -f
+
+        - command: creditrecovmode --cfg onLrOnly
+
+        - command: dlsset --enable -lossless
+
+        - command: bannerset
+          prompts:
+            - question: Please input content of security banner
+              response: "This is to demo the banner set command.\n."
+
+        - command: ipfilter --clone ipv4_telnet_http -from default_ipv4
+        - command: ipfilter --delrule ipv4_telnet_http -rule 2
+        - command: ipfilter --addrule ipv4_telnet_http -rule 2 -sip any -dp 23 -proto tcp -act deny
+        - command: ipfilter --addrule ipv4_telnet_http -rule 9 -sip any -dp 389 -proto tcp -act permit
+        - command: ipfilter --addrule ipv4_telnet_http -rule 10 -sip any -dp 389 -proto udp -act permit
+        - command: ipfilter --activate ipv4_telnet_http 
+        - command: ipfilter --show
+
+        - command: snmpconfig --set systemgroup
+          prompts:
+            - question: sysDescr
+              response: DemoSwitch
+            - question: sysLocation
+              response: San Jose
+            - question: sysContact
+              response: ""
+            - question: authTrapEnabled
+              response: "true"
+
+        - command: auditcfg --class 1,2,3,4,5,8,9
+
+        - command: syslogadmin --set -ip 10.1.2.4
+
+    register: configout
+
+  - name: print ansible_facts gathered
+    debug:
+      var: configout
