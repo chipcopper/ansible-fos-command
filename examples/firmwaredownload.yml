@@ -1,0 +1,29 @@
+---
+- hosts: switches
+  gather_facts: False
+
+  tasks:
+
+  - name: Update firmware
+    brocade_fos_command:
+      switch_login: admin
+      switch_password: password
+      switch_address: 10.1.2.3
+      command_set:
+        # 
+        - command: firmwaredownload -p ftp 10.2.3.4,anonymous,v8.2.1c,anyone@anywhere
+          prompts:
+            - question: Do you want to continue
+              response: "Y"
+          exit_tests:
+            - Failed
+            - failed
+            - Rebooting
+            - rebooting
+          timeout: 60
+
+    register: configout
+
+  - name: print ansible_facts gathered
+    debug:
+      var: configout

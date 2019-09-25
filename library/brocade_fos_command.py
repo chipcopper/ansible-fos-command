@@ -121,7 +121,7 @@ options:
                             - State variable default value
                         type: boolean
                         required: True
-            exit_test:
+            exit_tests:
                 description:
                     - List of strings other than the standard prompt that would indicated command termination.
                 required: False
@@ -224,7 +224,7 @@ import socket
 import paramiko
 from ansible.module_utils.basic import AnsibleModule
 
-def open_shell(module, ip_address, username, password, hostkeymust, messages, globaltimout):
+def open_shell(module, ip_address, username, password, hostkeymust, messages, globaltimeout):
     changed = False
     failed = False
     messages.append("")
@@ -234,7 +234,7 @@ def open_shell(module, ip_address, username, password, hostkeymust, messages, gl
     if not hostkeymust:
         ssh.set_missing_host_key_policy(paramiko.client.WarningPolicy)
     try:
-        ssh.connect(ip_address, username=username, password=password, timeout=globaltimout)
+        ssh.connect(ip_address, username=username, password=password, timeout=globaltimeout)
     except paramiko.ssh_exception.AuthenticationException as e:
         messages.append("invalid name/password")
         messages.append("Skipping due to error: " +  str(e))
@@ -248,7 +248,7 @@ def open_shell(module, ip_address, username, password, hostkeymust, messages, gl
         #return ssh, shell, changed, failed
 
     shell = ssh.invoke_shell()
-    shell.settimeout(10)
+    shell.settimeout(globaltimeout)
 
     return ssh, shell, changed, failed
 
