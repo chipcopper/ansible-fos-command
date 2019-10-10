@@ -232,7 +232,7 @@ def open_shell(module, ip_address, username, password, hostkeymust, messages, gl
     ssh = paramiko.SSHClient()
     ssh.load_system_host_keys()
     if not hostkeymust:
-        ssh.set_missing_host_key_policy(paramiko.client.WarningPolicy)
+        ssh.set_missing_host_key_policy(paramiko.client.WarningPolicy())
     try:
         ssh.connect(ip_address, username=username, password=password, timeout=globaltimeout)
     except paramiko.ssh_exception.AuthenticationException as e:
@@ -367,7 +367,7 @@ def main(argv):
     command_set_options = dict(
         command=dict(type='str', required=True),
         prompts=dict(type='list', elements='dict', options=prompt_options, default=[]),
-        start_state=dict(type=list, elements='dict', options=start_state_options,
+        start_state=dict(type='list', elements='dict', options=start_state_options,
                          default=[{"flag": "changed", "value": False},
                                   {"flag": "failed", "value": False}]),
         result_tests=dict(type='list', elements='dict', options=result_test_options, default=[]),
