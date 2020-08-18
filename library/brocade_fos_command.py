@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# Copyright: (c) 2019 Chip Copper <chip.copper@broadcom.com>
+# Copyright: (c) 2020 Chip Copper <chip.copper@broadcom.com>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 ANSIBLE_METADATA = {'metadata_version': '1.1',
@@ -32,7 +32,7 @@ description:
     - the user to indicate when change has and has not occurred.  Brocade will be providing
     - examples for many commands to indicate which options should be used with which commands.
 
-version_added: "1.0"
+version_added: "8.16.20.1"
 author: "Chip Copper (chip.copper@broadcom.com)""
 options:
     switch_login:
@@ -52,6 +52,11 @@ options:
             - Overall expected timeout value for the CLI session in seconds.
         required: False
         default: 15
+    login_delay:
+        description:
+            - Delay between session establishment and first expected response from the target
+        required: False
+        default: 5
     command_set:
         description:
             - List of commands to be executed in this session.
@@ -223,6 +228,7 @@ import time
 import socket
 import paramiko
 from ansible.module_utils.basic import AnsibleModule
+import re
 
 def open_shell(module, ip_address, username, password, hostkeymust, messages, globaltimeout):
     changed = False
@@ -268,11 +274,11 @@ def send_characters(module, messages, shell, the_characters):
     return
 
 
-def get_prompt(module, messages, shell):
+def get_prompt(module, messages, shell, login_delay):
 
     # Send a newline, wait for prompt, and flush everything up to this point (assuming motd, etc.)
     send_characters(module, messages, shell, "\n")
-    time.sleep(5)
+    time.sleep(login_delay)
     try:
         response = shell.recv(9999)
     except socket.timeout as e:
@@ -306,10 +312,9 @@ def get_prompt(module, messages, shell):
         messages.append("Exiting due to error: " +  str(e))
         failed = True
         module.fail_json(msg="Receive timeout.")
-
     return str(response)
 
-def receive_until_match(module, messages, shell, match_array, exit_array):
+def receive_until_match(module, messages, shell, match_array, exit_array, prompt_change):
     response_buffer = ""
     index = -1
 
@@ -322,6 +327,7 @@ def receive_until_match(module, messages, shell, match_array, exit_array):
             temp_buffer = str(shell.recv(9999))
         except socket.timeout as e:
             messages.append("Exiting due to error: " +  str(e))
+
             failed = True
             messages.append(response_buffer.split("\r\n"))
             module.fail_json(msg="Receive timeout.", messages=messages, failed=failed)
@@ -336,9 +342,16 @@ def receive_until_match(module, messages, shell, match_array, exit_array):
         for i in range(len(exit_array)):
             if exit_array[i] in response_buffer:
                 exited = True
+        if prompt_change:
+            prompt_match = re.search("\n[a-zA-Z0-9_.-]*:?[a-zA-Z_0-9]*:[a-zA-Z_0-9_.-]*>", \
+                response_buffer)
+            if prompt_match is not None:
+                new_prompt = prompt_match.group()[1:]
+                exited = True
+        else:
+            new_prompt = None
 
-
-    return index, response_buffer, exited
+    return index, response_buffer, exited, new_prompt
 
 def cleanup_response(response_buffer):
     response_lines = response_buffer.split("\r\n")
@@ -383,6 +396,7 @@ def main(argv):
         global_timeout=dict(type='int', default=15),
         command_set=dict(type='list', elements='dict', options=command_set_options),
         hostkeymust=dict(type='bool', default=False),
+        login_delay=dict(type='int', default=5),
     )
     #global messages
 
@@ -394,6 +408,9 @@ def main(argv):
     changed = False
     failed = False
 
+    prompt_change_commands = []
+    prompt_change_commands.append("setcontext")
+
     # Wrangle out the variables
     switch_login = module.params['switch_login']
     switch_password = module.params['switch_password']
@@ -401,6 +418,7 @@ def main(argv):
     command_set = module.params['command_set']
     hostkeymust = module.params['hostkeymust']
     global_timeout = module.params['global_timeout']
+    login_delay = module.params['login_delay']
 
     result = {}
 
@@ -409,7 +427,7 @@ def main(argv):
                                              hostkeymust, messages, global_timeout)
 
     # Discover prompt string
-    switch_prompt = get_prompt(module, messages, shell)
+    switch_prompt = get_prompt(module, messages, shell, login_delay)
     collected_responses = switch_prompt
 
     # For each command
@@ -440,6 +458,11 @@ def main(argv):
         else:
             shell.settimeout(command_set[command_index]['timeout'])
 
+        # If the command is in the prompt change list, set the flag.  Otherwise clear the flag
+        prompt_change = False
+        for i in range(len(prompt_change_commands)):
+            if prompt_change_commands[i] in command_set[command_index]['command']:
+                prompt_change = True
 
         # Send the inital command line
         send_characters(module, messages, shell, command_set[command_index]['command'] + "\n")
@@ -447,11 +470,13 @@ def main(argv):
         # This loop will repeat until either the prompt or another exit string is found
         back_to_prompt = False
         while not back_to_prompt:
-            prompt_index, response_buffer, exited = \
-                receive_until_match(module, messages, shell, questions, exit_array)
+            prompt_index, response_buffer, exited, new_prompt = \
+                receive_until_match(module, messages, shell, questions, exit_array, prompt_change)
             command_results += response_buffer
             if exited:
                 back_to_prompt = True
+                if prompt_change:
+                    switch_prompt = new_prompt
             else:
                 send_characters(module, messages, shell,
                                 command_set[command_index]['prompts'][prompt_index]['response'] + "\n")
