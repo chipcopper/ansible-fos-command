@@ -4,6 +4,16 @@
 # Copyright: (c) 2020 Chip Copper <chip.copper@broadcom.com>
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
+""" Ansible module to allow CLI commands to be run from inside of playbooks """
+
+import sys
+import time
+import socket
+import re
+import paramiko
+from ansible.module_utils.basic import AnsibleModule
+
+
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
                     'supported_by': 'community'}
@@ -223,12 +233,7 @@ messages:
 
 '''
 
-import sys
-import time
-import socket
-import paramiko
-from ansible.module_utils.basic import AnsibleModule
-import re
+
 
 def open_shell(module, ip_address, username, password, hostkeymust, messages, globaltimeout):
     changed = False
@@ -241,14 +246,14 @@ def open_shell(module, ip_address, username, password, hostkeymust, messages, gl
         ssh.set_missing_host_key_policy(paramiko.client.WarningPolicy())
     try:
         ssh.connect(ip_address, username=username, password=password, timeout=globaltimeout)
-    except paramiko.ssh_exception.AuthenticationException as e:
+    except paramiko.ssh_exception.AuthenticationException as exception:
         messages.append("invalid name/password")
-        messages.append("Skipping due to error: " +  str(e))
+        messages.append("Skipping due to error: " +  str(exception))
         failed = True
         module.fail_json(msg="Invalid login credentials.", messages=messages)
         #return ssh, shell, changed, failed
-    except Exception as e:
-        messages.append("Skipping due to error: " +  str(e))
+    except BaseException as exception:
+        messages.append("Skipping due to error: " +  str(exception))
         failed = True
         module.fail_json(msg="Login error.", messages=messages)
         #return ssh, shell, changed, failed
@@ -267,8 +272,8 @@ def send_characters(module, messages, shell, the_characters):
 
     try:
         shell.send(the_characters)
-    except Exception as e:
-        messages.append("Exiting due to send error: " +  str(e))
+    except BaseException as exception:
+        messages.append("Exiting due to send error: " +  str(exception))
         failed = True
         module.fail_json(msg="Send module failed", messages=messages, failed=failed)
     return
@@ -281,8 +286,8 @@ def get_prompt(module, messages, shell, login_delay):
     time.sleep(login_delay)
     try:
         response = shell.recv(9999)
-    except socket.timeout as e:
-        messages.append("Exiting due to error: " +  str(e))
+    except socket.timeout as exception:
+        messages.append("Exiting due to error: " +  str(exception))
         failed = True
         module.fail_json(msg="Receive timeout.", failed=failed)
 
@@ -292,24 +297,24 @@ def get_prompt(module, messages, shell, login_delay):
     # This will be the \n from the send.
     try:
         response = shell.recv(1)
-    except socket.timeout as e:
-        messages.append("Exiting due to error: " +  str(e))
+    except socket.timeout as exception:
+        messages.append("Exiting due to error: " +  str(exception))
         failed = True
         module.fail_json(msg="Receive timeout.", failed=failed)
 
     # This will be the \n from the prompt to begin on a new line.
     try:
         response = shell.recv(1)
-    except socket.timeout as e:
-        messages.append("Exiting due to error: " +  str(e))
+    except socket.timeout as exception:
+        messages.append("Exiting due to error: " +  str(exception))
         failed = True
         module.fail_json(msg="Receive timeout.")
 
     # This should be the prompt
     try:
-        response = shell.recv(9999)
-    except socket.timeout as e:
-        messages.append("Exiting due to error: " +  str(e))
+        response = shell.recv(9999).decode()
+    except socket.timeout as exception:
+        messages.append("Exiting due to error: " +  str(exception))
         failed = True
         module.fail_json(msg="Receive timeout.")
     return str(response)
@@ -324,14 +329,14 @@ def receive_until_match(module, messages, shell, match_array, exit_array, prompt
 
     while not found and not closed and not exited:
         try:
-            temp_buffer = str(shell.recv(9999))
-        except socket.timeout as e:
-            messages.append("Exiting due to error: " +  str(e))
+            temp_buffer = shell.recv(9999).decode()
+        except socket.timeout as exception:
+            messages.append("Exiting due to error: " +  str(exception))
 
             failed = True
             messages.append(response_buffer.split("\r\n"))
             module.fail_json(msg="Receive timeout.", messages=messages, failed=failed)
-        response_buffer += str(temp_buffer)
+        response_buffer += temp_buffer
         for i in range(len(match_array)):
             if match_array[i] in response_buffer:
                 index = i
@@ -432,7 +437,7 @@ def main(argv):
 
 
     command_state = {'changed': False, 'failed': False}
-    
+
     # For each command
     for command_index in range(len(command_set)):
         # Build the expected responses for each question or prompt
