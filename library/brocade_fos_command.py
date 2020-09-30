@@ -42,7 +42,7 @@ description:
     - the user to indicate when change has and has not occurred.  Brocade will be providing
     - examples for many commands to indicate which options should be used with which commands.
 
-version_added: "8.19.20.1"
+version_added: "9.30.20.1"
 author: "Chip Copper (chip.copper@broadcom.com)""
 options:
     switch_login:
