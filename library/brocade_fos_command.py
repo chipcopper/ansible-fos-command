@@ -248,12 +248,12 @@ def open_shell(module, ip_address, username, password, hostkeymust, messages, gl
         ssh.connect(ip_address, username=username, password=password, timeout=globaltimeout)
     except paramiko.ssh_exception.AuthenticationException as exception:
         messages.append("invalid name/password")
-        messages.append("Skipping due to error: " +  str(exception))
+        messages.append("Invalid session credentials: " +  str(exception))
         failed = True
         module.fail_json(msg="Invalid login credentials.", messages=messages)
         #return ssh, shell, changed, failed
     except BaseException as exception:
-        messages.append("Skipping due to error: " +  str(exception))
+        messages.append("Login error: " +  str(exception))
         failed = True
         module.fail_json(msg="Login error.", messages=messages)
         #return ssh, shell, changed, failed
@@ -273,9 +273,9 @@ def send_characters(module, messages, shell, the_characters):
     try:
         shell.send(the_characters)
     except BaseException as exception:
-        messages.append("Exiting due to send error: " +  str(exception))
+        messages.append("Sending error. Characters: " + the_characters + "Exception: " + str(exception))
         failed = True
-        module.fail_json(msg="Send module failed", messages=messages, failed=failed)
+        module.fail_json(msg="Sending characters error: ", messages=messages, failed=failed)
     return
 
 
@@ -287,9 +287,9 @@ def get_prompt(module, messages, shell, login_delay):
     try:
         response = shell.recv(9999)
     except socket.timeout as exception:
-        messages.append("Exiting due to error: " +  str(exception))
+        messages.append("Prompt timeout - Step 1: " +  str(exception))
         failed = True
-        module.fail_json(msg="Receive timeout.", failed=failed)
+        module.fail_json(msg="Prompt timeout - Step 1.", failed=failed)
 
     # Send another newline to get a fresh prompt
     send_characters(module, messages, shell, "\n")
@@ -298,25 +298,25 @@ def get_prompt(module, messages, shell, login_delay):
     try:
         response = shell.recv(1)
     except socket.timeout as exception:
-        messages.append("Exiting due to error: " +  str(exception))
+        messages.append("Prompt timeout - Step 2: " +  str(exception))
         failed = True
-        module.fail_json(msg="Receive timeout.", failed=failed)
+        module.fail_json(msg="Prompt timeout - Step 2. ", failed=failed)
 
     # This will be the \n from the prompt to begin on a new line.
     try:
         response = shell.recv(1)
     except socket.timeout as exception:
-        messages.append("Exiting due to error: " +  str(exception))
+        messages.append("Prompt timeout - Step 3: " +  str(exception))
         failed = True
-        module.fail_json(msg="Receive timeout.")
+        module.fail_json(msg="Prompt timeout - Step 3. ")
 
     # This should be the prompt
     try:
         response = shell.recv(9999).decode()
     except socket.timeout as exception:
-        messages.append("Exiting due to error: " +  str(exception))
+        messages.append("Prompt timeout - Step 4:  " +  str(exception))
         failed = True
-        module.fail_json(msg="Receive timeout.")
+        module.fail_json(msg="Prompt timeout - Step 4. ")
     return str(response)
 
 def receive_until_match(module, messages, shell, match_array, exit_array, prompt_change):
@@ -331,7 +331,7 @@ def receive_until_match(module, messages, shell, match_array, exit_array, prompt
         try:
             temp_buffer = shell.recv(9999).decode()
         except socket.timeout as exception:
-            messages.append("Exiting due to error: " +  str(exception))
+            messages.append("Receive error.  Buffer: " + response_buffer + "Exception: " +  str(exception))
 
             failed = True
             messages.append(response_buffer.split("\r\n"))
